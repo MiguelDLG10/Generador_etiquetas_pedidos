@@ -1,0 +1,6 @@
+# Requisitos principales para el proyecto Etiquetas Shein
+streamlit
+pandas
+reportlab
+openpyxl
+joblib
