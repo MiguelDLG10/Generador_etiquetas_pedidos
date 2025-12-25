@@ -170,7 +170,7 @@ with col2:
                     tmp_output_path = tmp_output.name
                 
                 # Generate
-                generate_labels_and_summary(tmp_input_path, tmp_output_path)
+                stats = generate_labels_and_summary(tmp_input_path, tmp_output_path)
                 
                 # Read PDF
                 with open(tmp_output_path, 'rb') as pdf_file:
@@ -180,17 +180,24 @@ with col2:
                 os.unlink(tmp_input_path)
                 
                 # Success State
-                st.success(f"Successfully processed {uploaded_file.name}")
+                st.success(f"Processed {stats['valid_rows']} valid orders from {uploaded_file.name}")
                 
-                # Stats Row
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    st.metric("Status", "Ready")
-                with c2:
-                    st.metric("Format", "PDF")
-                with c3:
-                    st.metric("Size", f"{len(pdf_data) / 1024:.1f} KB")
+                # Detailed Stats
+                s1, s2, s3 = st.columns(3)
+                with s1:
+                    st.metric("Total Rows Found", stats['total_rows'])
+                with s2:
+                    st.metric("Unique Orders", stats['unique_orders'])
+                with s3:
+                    st.metric("Dropped Rows", stats['dropped_rows'], 
+                             delta=f"-{stats['dropped_rows']}" if stats['dropped_rows'] > 0 else None,
+                             delta_color="inverse")
                 
+                if stats['dropped_rows'] > 0:
+                    with st.expander("⚠️ Review Dropped/Skipped Rows", expanded=True):
+                        for reason in stats['drop_reasons']:
+                            st.warning(reason)
+
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 # Download Action
