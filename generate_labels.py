@@ -175,10 +175,7 @@ def generate_labels_and_summary(input_file, output_file):
                 y_pos -= 14
             
             # Items Header
-            # Removed per user request
-            # c.setFont("Helvetica", 8)
-            # c.drawString(margin, y_pos, "SKU / Cantidad")
-            # y_pos -= 10
+            # Header removed to save space
             
             return y_pos
 
@@ -187,7 +184,7 @@ def generate_labels_and_summary(input_file, output_file):
         y_pos = draw_header(c, margin, label_width, label_height, paquete_vendedor, numero_guia)
         
         # List Items
-        c.setFont("Helvetica", 11) # Reverted to non-bold per request, kept size 11
+        c.setFont("Helvetica", 12) # Reduced to 12 non-bold
         
         # Iterate over aggregated SKUs
         for _, row in group.iterrows():
@@ -206,7 +203,7 @@ def generate_labels_and_summary(input_file, output_file):
             text = f"{display_sku}  (x{qty})"
             
             c.drawString(margin, y_pos, text)
-            y_pos -= 14 # Increased spacing for larger font
+            y_pos -= 15 # Adjusted spacing for font size 12
             
             # Check if we ran out of space
             if y_pos < margin + 8: # Increased buffer for larger footer
