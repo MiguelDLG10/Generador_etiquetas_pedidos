@@ -175,9 +175,10 @@ def generate_labels_and_summary(input_file, output_file):
                 y_pos -= 14
             
             # Items Header
-            c.setFont("Helvetica", 8)
-            c.drawString(margin, y_pos, "SKU / Cantidad")
-            y_pos -= 10
+            # Removed per user request
+            # c.setFont("Helvetica", 8)
+            # c.drawString(margin, y_pos, "SKU / Cantidad")
+            # y_pos -= 10
             
             return y_pos
 
@@ -186,7 +187,7 @@ def generate_labels_and_summary(input_file, output_file):
         y_pos = draw_header(c, margin, label_width, label_height, paquete_vendedor, numero_guia)
         
         # List Items
-        c.setFont("Helvetica", 9)
+        c.setFont("Helvetica", 11) # Reverted to non-bold per request, kept size 11
         
         # Iterate over aggregated SKUs
         for _, row in group.iterrows():
@@ -205,7 +206,7 @@ def generate_labels_and_summary(input_file, output_file):
             text = f"{display_sku}  (x{qty})"
             
             c.drawString(margin, y_pos, text)
-            y_pos -= 12 # Increased spacing
+            y_pos -= 14 # Increased spacing for larger font
             
             # Check if we ran out of space
             if y_pos < margin + 8: # Increased buffer for larger footer
@@ -221,7 +222,7 @@ def generate_labels_and_summary(input_file, output_file):
                 # Start new page for same order
                 c.setPageSize((label_width, label_height))
                 y_pos = draw_header(c, margin, label_width, label_height, paquete_vendedor, numero_guia)
-                c.setFont("Helvetica", 9) # Reset font for items
+                c.setFont("Helvetica", 11) # Reset font for items
         
         # Add page number at the bottom center of the last page for this order
         c.setFont("Helvetica-Bold", 10) # Larger font
