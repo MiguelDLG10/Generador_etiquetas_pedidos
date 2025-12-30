@@ -219,7 +219,7 @@ def generate_labels_and_summary(input_file, output_file):
                 # Start new page for same order
                 c.setPageSize((label_width, label_height))
                 y_pos = draw_header(c, margin, label_width, label_height, paquete_vendedor, numero_guia)
-                c.setFont("Helvetica", 11) # Reset font for items
+                c.setFont("Helvetica", 12) # Reset font for items
         
         # Add page number at the bottom center of the last page for this order
         c.setFont("Helvetica-Bold", 10) # Larger font
