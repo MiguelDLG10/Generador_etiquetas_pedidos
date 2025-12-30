@@ -1,7 +1,8 @@
 import streamlit as st
 import tempfile
 import os
-from generate_labels import generate_labels_and_summary
+from generate_labels import generate_labels_and_summary, load_and_normalize_data
+from label_sorter import sort_tiktok_labels
 
 # Page Configuration
 st.set_page_config(
@@ -157,62 +158,161 @@ with col2:
     if uploaded_file is not None:
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Processing
-        with st.spinner('Processing orders...'):
-            try:
-                # Save uploaded file
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_input:
-                    tmp_input.write(uploaded_file.getbuffer())
-                    tmp_input_path = tmp_input.name
-                
-                # Output file
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_output:
-                    tmp_output_path = tmp_output.name
-                
-                # Generate
-                stats = generate_labels_and_summary(tmp_input_path, tmp_output_path)
-                
-                # Read PDF
-                with open(tmp_output_path, 'rb') as pdf_file:
-                    pdf_data = pdf_file.read()
-                
-                # Clean up
-                os.unlink(tmp_input_path)
-                
-                # Success State
-                st.success(f"Processed {stats['valid_rows']} valid orders from {uploaded_file.name}")
-                
-                # Detailed Stats
-                s1, s2, s3 = st.columns(3)
-                with s1:
-                    st.metric("Total Rows Found", stats['total_rows'])
-                with s2:
-                    st.metric("Unique Orders", stats['unique_orders'])
-                with s3:
-                    st.metric("Dropped Rows", stats['dropped_rows'], 
-                             delta=f"-{stats['dropped_rows']}" if stats['dropped_rows'] > 0 else None,
-                             delta_color="inverse")
-                
-                if stats['dropped_rows'] > 0:
-                    with st.expander("⚠️ Review Dropped/Skipped Rows", expanded=True):
-                        for reason in stats['drop_reasons']:
-                            st.warning(reason)
+        # Save Excel immediately
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp_input:
+            tmp_input.write(uploaded_file.getbuffer())
+            tmp_input_path = tmp_input.name
 
-                st.markdown("<br>", unsafe_allow_html=True)
-                
-                # Download Action
-                st.download_button(
-                    label="Download Labels",
-                    data=pdf_data,
-                    file_name="etiquetas_pedidos.pdf",
-                    mime="application/pdf"
-                )
-                
-                if os.path.exists(tmp_output_path):
-                    os.unlink(tmp_output_path)
+        try:
+            # Detect Format
+            _, detection_stats = load_and_normalize_data(tmp_input_path) 
+            format_type = detection_stats.get('format_detected', 'Unknown')
+        except Exception as e:
+            format_type = 'Error'
+            st.error(f"Error detecting file format: {str(e)}")
+
+        if format_type == 'TikTok':
+            st.info("✅ TikTok Orders Detected")
+            st.markdown("### Step 2: Upload Labels PDF")
+            st.markdown("Upload the unordered labels PDF file from TikTok to sort them.")
+            
+            pdf_file = st.file_uploader(
+                "Upload Labels PDF",
+                type=['pdf'],
+                key='tiktok_pdf'
+            )
+            
+            if pdf_file:
+                with st.spinner('Sorting labels...'):
+                    # Save PDF
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_pdf:
+                        tmp_pdf.write(pdf_file.getbuffer())
+                        tmp_pdf_path = tmp_pdf.name
                     
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
+                    # Output
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_output:
+                        tmp_output_path = tmp_output.name
+
+                    # Sort
+                    sort_stats = sort_tiktok_labels(tmp_input_path, tmp_pdf_path, tmp_output_path)
+                    
+                    # Check result
+                    if sort_stats['success']:
+                        st.success(f"Sorted labels for {sort_stats['matched_ids_count']} / {sort_stats['total_excel_ids']} orders.")
+                        
+                        if sort_stats['missing_ids']:
+                            with st.expander(f"⚠️ Missing Labels for {len(sort_stats['missing_ids'])} Orders"):
+                                st.write("The following Tracking IDs were in Excel but not found in PDF:")
+                                st.write(sort_stats['missing_ids'])
+                        
+                        if sort_stats['unmatched_pages'] > 0:
+                            st.info(f"{sort_stats['unmatched_pages']} pages in the PDF were not matched to any order (likely extra pages).")
+
+                        # Read and Download
+                        with open(tmp_output_path, 'rb') as f:
+                            pdf_data = f.read()
+                            
+                        st.download_button(
+                            label="Download Sorted Labels",
+                            data=pdf_data,
+                            file_name="etiquetas_tiktok_ordenadas.pdf",
+                            mime="application/pdf"
+                        )
+                    else:
+                        st.error(f"Error sorting labels: {sort_stats['error']}")
+                    
+                    if os.path.exists(tmp_output_path): os.unlink(tmp_output_path)
+
+                st.markdown("<hr>", unsafe_allow_html=True)
+                st.markdown("### Step 3: Picking List & Summary")
+                
+                # Also generate the standard summary/labels PDF for TikTok (picking list)
+                with st.spinner('Generating picking list...'):
+                    try:
+                        # Output file for generated summary
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_gen_output:
+                            tmp_gen_output_path = tmp_gen_output.name
+                        
+                        # Generate (using existing logic which handles TikTok format)
+                        gen_stats = generate_labels_and_summary(tmp_input_path, tmp_gen_output_path)
+                        
+                        # Read PDF
+                        with open(tmp_gen_output_path, 'rb') as gen_pdf_file:
+                            gen_pdf_data = gen_pdf_file.read()
+                            
+                        # Success State
+                        st.success(f"Generated picking list for {gen_stats['unique_orders']} orders.")
+                        
+                        # Download Action
+                        st.download_button(
+                            label="Download Picking List & Summary",
+                            data=gen_pdf_data,
+                            file_name="etiquetas_tiktok_resumen.pdf",
+                            mime="application/pdf"
+                        )
+                        
+                        if os.path.exists(tmp_gen_output_path):
+                            os.unlink(tmp_gen_output_path)
+                            
+                    except Exception as e:
+                        st.warning(f"Could not generate picking list summary: {str(e)}")
+
+        elif format_type == 'Shein':
+            # Processing Shein (Existing Logic)
+            with st.spinner('Processing Shein orders...'):
+                try:
+                    # Output file
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_output:
+                        tmp_output_path = tmp_output.name
+                    
+                    # Generate
+                    stats = generate_labels_and_summary(tmp_input_path, tmp_output_path)
+                    
+                    # Read PDF
+                    with open(tmp_output_path, 'rb') as pdf_file:
+                        pdf_data = pdf_file.read()
+                    
+                    # Success State
+                    st.success(f"Processed {stats['valid_rows']} valid orders from {uploaded_file.name}")
+                    
+                    # Detailed Stats
+                    s1, s2, s3 = st.columns(3)
+                    with s1:
+                        st.metric("Total Rows Found", stats['total_rows'])
+                    with s2:
+                        st.metric("Unique Orders", stats['unique_orders'])
+                    with s3:
+                        st.metric("Dropped Rows", stats['dropped_rows'], 
+                                 delta=f"-{stats['dropped_rows']}" if stats['dropped_rows'] > 0 else None,
+                                 delta_color="inverse")
+                    
+                    if stats['dropped_rows'] > 0:
+                        with st.expander("⚠️ Review Dropped/Skipped Rows", expanded=True):
+                            for reason in stats['drop_reasons']:
+                                st.warning(reason)
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # Download Action
+                    st.download_button(
+                        label="Download Labels",
+                        data=pdf_data,
+                        file_name="etiquetas_shein_procesadas.pdf",
+                        mime="application/pdf"
+                    )
+                    
+                    if os.path.exists(tmp_output_path):
+                        os.unlink(tmp_output_path)
+                        
+                except Exception as e:
+                    st.error(f"Error processing Shein file: {str(e)}")
+        
+        else:
+            st.error("Could not recognize file format. Please ensure your Excel file contains valid Shein or TikTok order columns.")
+
+        # Cleanup Excel
+        if os.path.exists(tmp_input_path):
+            os.unlink(tmp_input_path)
     
     st.markdown('</div>', unsafe_allow_html=True)
 

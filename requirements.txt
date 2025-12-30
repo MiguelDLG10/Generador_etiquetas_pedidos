@@ -4,3 +4,4 @@ pandas
 reportlab
 openpyxl
 joblib
+PyPDF2
